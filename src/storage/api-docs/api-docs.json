@@ -1,0 +1,70 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "GRAPH API",
+        "description": "API para gestionar nodos jerárquicos (árbol de nodos)",
+        "version": "1.0.0"
+    },
+    "paths": {
+        "/api/nodes": {
+            "get": {
+                "tags": [
+                    "Nodes"
+                ],
+                "summary": "Listar todos los nodos raíz",
+                "description": "Devuelve todos los nodos sin padre (parent = null).",
+                "operationId": "6a49c5145f15e738bcec4f33191ed0c4",
+                "responses": {
+                    "200": {
+                        "description": "Lista de nodos raíz"
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Nodes"
+                ],
+                "summary": "Crear un nuevo nodo",
+                "operationId": "4211f0fc512d4ae4547f7ead6fbbfed3",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "id"
+                                ],
+                                "properties": {
+                                    "id": {
+                                        "type": "integer",
+                                        "example": 7
+                                    },
+                                    "parent": {
+                                        "type": "integer",
+                                        "example": 1,
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Nodo creado correctamente"
+                    },
+                    "400": {
+                        "description": "Error de validación o jerarquía"
+                    }
+                }
+            }
+        }
+    },
+    "tags": [
+        {
+            "name": "Nodes",
+            "description": "Operaciones sobre nodos del árbol"
+        }
+    ]
+}
