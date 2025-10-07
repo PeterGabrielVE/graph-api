@@ -5,8 +5,10 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Node;
 use App\Services\NumberWordService;
+use App\Services\NodeService;
 use Carbon\Carbon;
 use Illuminate\Validation\ValidationException;
+use App\Http\Requests\StoreNodeRequest;
 use App\Repositories\NodeRepository;
 use App\Http\Resources\NodeResource;
 use Illuminate\Http\JsonResponse;
@@ -27,10 +29,12 @@ use Illuminate\Support\Facades\Log;
 class NodeController extends Controller
 {
     protected NodeRepository $nodeRepo;
+    protected NodeService $nodeService;
 
-    public function __construct(NodeRepository $nodeRepo)
+    public function __construct(NodeRepository $nodeRepo, NodeService $nodeService)
     {
         $this->nodeRepo = $nodeRepo;
+        $this->nodeService = $nodeService;
     }
 
     /**
@@ -45,25 +49,50 @@ class NodeController extends Controller
      *     )
      * )
      */
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         try {
-            $nodes = $this->nodeRepo->getRootNodes();
+            // Detectar idioma y zona horaria
+            $locale = substr(
+                $request->header('X-Lang') ?: $request->header('Accept-Language') ?: 'en',
+                0,
+                2
+            );
+            $tz = $request->attributes->get('tz') ?: config('app.timezone', 'UTC');
+
+            // Obtener nodos raíz desde el repositorio
+            $roots = $this->nodeRepo->getRootNodes();
+
+            // Transformar resultados
+            $result = $roots->map(function ($node) use ($locale, $tz) {
+                return [
+                    'id' => (int) $node->id,
+                    'parent' => null,
+                    'title' => NumberWordService::numberToWords((int) $node->id, $locale),
+                    'created_at' => Carbon::parse($node->created_at, 'UTC')
+                        ->setTimezone($tz)
+                        ->toDateTimeString(),
+                ];
+            });
 
             return response()->json([
                 'success' => true,
-                'data' => NodeResource::collection($nodes)
+                'count' => $result->count(),
+                'data' => $result,
             ], 200);
         } catch (\Throwable $e) {
-            // Log del error para debugging
-            Log::error('Error al obtener nodos raíz: ' . $e->getMessage());
+            Log::error('Error al listar nodos raíz', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
 
             return response()->json([
                 'success' => false,
-                'message' => 'Ocurrió un error al obtener los nodos.'
+                'message' => 'Ocurrió un error al listar los nodos raíz.',
             ], 500);
         }
     }
+
 
         /**
      * @OA\Post(
@@ -82,55 +111,37 @@ class NodeController extends Controller
      *     @OA\Response(response=400, description="Error de validación o jerarquía")
      * )
      */
-    public function store(Request $request)
+    public function store(StoreNodeRequest $request): JsonResponse
     {
-        $data = $request->validate([
-            'parent' => ['nullable', 'integer', 'exists:nodes,id'],
-        ]);
-        $node = Node::create([
-            'parent' => $data['parent'] ?? null,
-            'title' => null,
-            'created_at' => Carbon::now('UTC')->toDateTimeString()
-        ]);
+        try {
+            $locale = substr(
+                $request->header('X-Lang') ?: $request->header('Accept-Language') ?: 'en',
+                0,
+                2
+            );
 
+            $node = $this->nodeService->createNode(
+                $request->validated()['parent'] ?? null,
+                $locale
+            );
 
-        $titleEn = NumberWordService::numberToWords((int)$node->id, 'en');
-        $node->title = $titleEn;
-        $node->save();
+            return response()->json([
+                'success' => true,
+                'data' => new NodeResource($node),
+            ], 201);
+        } catch (\Throwable $e) {
+            Log::error('Error en NodeController@store', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
 
-
-        $locale = substr($request->header('X-Lang') ?: $request->header('Accept-Language') ?: 'en', 0, 2);
-        $tz = $request->attributes->get('tz') ?: config('app.timezone', 'UTC');
-
-        $translatedTitle = NumberWordService::numberToWords((int)$node->id, $locale);
-
-        return response()->json([
-            'id' => (int)$node->id,
-            'parent' => $node->parent ? (int)$node->parent : null,
-            'title' => $translatedTitle,
-            'created_at' => Carbon::parse($node->created_at, 'UTC')->setTimezone($tz)->toDateTimeString(),
-        ], 201);
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pudo crear el nodo.',
+            ], 500);
+        }
     }
 
-    // Listar nodos raíz (parent == null)
-    public function listRoots(Request $request)
-    {
-        $locale = substr($request->header('X-Lang') ?: $request->header('Accept-Language') ?: 'en', 0, 2);
-        $tz = $request->attributes->get('tz') ?: config('app.timezone','UTC');
-
-        $roots = Node::whereNull('parent')->get();
-
-        $result = $roots->map(function ($n) use ($locale, $tz) {
-            return [
-                'id' => (int)$n->id,
-                'parent' => null,
-                'title' => NumberWordService::numberToWords((int)$n->id, $locale),
-                'created_at' => Carbon::parse($n->created_at, 'UTC')->setTimezone($tz)->toDateTimeString(),
-            ];
-        });
-
-        return response()->json($result);
-    }
 
     // Listar hijos a partir del padre con optional depth
     public function listChildren(Request $request, $parentId)
