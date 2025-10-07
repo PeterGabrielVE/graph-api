@@ -7,6 +7,10 @@ use App\Models\Node;
 use App\Services\NumberWordService;
 use Carbon\Carbon;
 use Illuminate\Validation\ValidationException;
+use App\Repositories\NodeRepository;
+use App\Http\Resources\NodeResource;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
 
 /**
  * @OA\Info(
@@ -22,7 +26,14 @@ use Illuminate\Validation\ValidationException;
  */
 class NodeController extends Controller
 {
-       /**
+    protected NodeRepository $nodeRepo;
+
+    public function __construct(NodeRepository $nodeRepo)
+    {
+        $this->nodeRepo = $nodeRepo;
+    }
+
+    /**
      * @OA\Get(
      *     path="/api/nodes",
      *     tags={"Nodes"},
@@ -34,9 +45,24 @@ class NodeController extends Controller
      *     )
      * )
      */
-    public function index()
+    public function index(): JsonResponse
     {
-        return response()->json(Node::whereNull('parent')->get());
+        try {
+            $nodes = $this->nodeRepo->getRootNodes();
+
+            return response()->json([
+                'success' => true,
+                'data' => NodeResource::collection($nodes)
+            ], 200);
+        } catch (\Throwable $e) {
+            // Log del error para debugging
+            Log::error('Error al obtener nodos raíz: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Ocurrió un error al obtener los nodos.'
+            ], 500);
+        }
     }
 
         /**
