@@ -10,6 +10,9 @@ class NumberWordService
      */
     public static function numberToWords(int $n, string $locale = 'en'): string
     {
+        if (!class_exists(NumberFormatter::class)) {
+            return (string)$n; // fallback simple: devuelve el número como string
+        }
         try {
             $fmt = new NumberFormatter($locale, NumberFormatter::SPELLOUT);
             $words = $fmt->format($n);
