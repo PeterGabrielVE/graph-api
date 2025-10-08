@@ -1,229 +1,209 @@
 <?php
+
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use App\Models\Node;
-use App\Services\NumberWordService;
-use App\Services\NodeService;
-use Carbon\Carbon;
-use Illuminate\Validation\ValidationException;
-use App\Http\Requests\StoreNodeRequest;
-use App\Repositories\NodeRepository;
-use App\Http\Resources\NodeResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
+use App\Models\Node;
+use App\Services\NodeService;
+use App\Services\NumberWordService;
+use App\Repositories\NodeRepository;
+use App\Http\Requests\StoreNodeRequest;
+use App\Http\Resources\NodeResource;
 
 /**
  * @OA\Info(
- *     title="GRAPH API",
+ *     title="Graph API",
  *     version="1.0.0",
  *     description="API para gestionar nodos jerárquicos (árbol de nodos)"
  * )
  *
  * @OA\Tag(
  *     name="Nodes",
- *     description="Operaciones sobre nodos del árbol"
+ *     description="Operaciones CRUD sobre nodos del árbol"
  * )
  */
 class NodeController extends Controller
 {
-    protected NodeRepository $nodeRepo;
-    protected NodeService $nodeService;
-
-    public function __construct(NodeRepository $nodeRepo, NodeService $nodeService)
-    {
-        $this->nodeRepo = $nodeRepo;
-        $this->nodeService = $nodeService;
-    }
+    public function __construct(
+        protected NodeRepository $nodeRepo,
+        protected NodeService $nodeService
+    ) {}
 
     /**
      * @OA\Get(
-     *     path="/api/nodes",
+     *     path="/api/v1/nodes/roots",
      *     tags={"Nodes"},
-     *     summary="Listar todos los nodos raíz",
-     *     description="Devuelve todos los nodos sin padre (parent = null).",
+     *     summary="Listar nodos raíz",
+     *     description="Obtiene todos los nodos que no tienen padre (`parent = null`).",
      *     @OA\Response(
      *         response=200,
-     *         description="Lista de nodos raíz"
+     *         description="Lista de nodos raíz",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="count", type="integer", example=3),
+     *             @OA\Property(property="data", type="array",
+     *                 @OA\Items(
+     *                     @OA\Property(property="id", type="integer", example=1),
+     *                     @OA\Property(property="parent", type="integer", nullable=true, example=null),
+     *                     @OA\Property(property="title", type="string", example="One"),
+     *                     @OA\Property(property="created_at", type="string", example="2025-10-07 20:10:00")
+     *                 )
+     *             )
+     *         )
      *     )
      * )
      */
-    public function index(Request $request): JsonResponse
+    public function listRoots(Request $request): JsonResponse
     {
         try {
-            // Detectar idioma y zona horaria
-            $locale = substr(
-                $request->header('X-Lang') ?: $request->header('Accept-Language') ?: 'en',
-                0,
-                2
-            );
+            $locale = substr($request->header('X-Lang') ?: $request->header('Accept-Language') ?: 'en', 0, 2);
             $tz = $request->attributes->get('tz') ?: config('app.timezone', 'UTC');
 
-            // Obtener nodos raíz desde el repositorio
             $roots = $this->nodeRepo->getRootNodes();
 
-            // Transformar resultados
-            $result = $roots->map(function ($node) use ($locale, $tz) {
-                return [
-                    'id' => (int) $node->id,
-                    'parent' => null,
-                    'title' => NumberWordService::numberToWords((int) $node->id, $locale),
-                    'created_at' => Carbon::parse($node->created_at, 'UTC')
-                        ->setTimezone($tz)
-                        ->toDateTimeString(),
-                ];
-            });
-
-            return response()->json([
-                'success' => true,
-                'count' => $result->count(),
-                'data' => $result,
-            ], 200);
-        } catch (\Throwable $e) {
-            Log::error('Error al listar nodos raíz', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
+            $data = $roots->map(fn($node) => [
+                'id' => (int) $node->id,
+                'parent' => null,
+                'title' => NumberWordService::numberToWords((int) $node->id, $locale),
+                'created_at' => Carbon::parse($node->created_at, 'UTC')->setTimezone($tz)->toDateTimeString(),
             ]);
 
             return response()->json([
-                'success' => false,
-                'message' => 'Ocurrió un error al listar los nodos raíz.',
-            ], 500);
+                'success' => true,
+                'count' => $data->count(),
+                'data' => $data,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error al listar nodos raíz', ['error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => 'Error interno del servidor.'], 500);
         }
     }
 
-
-        /**
+    /**
      * @OA\Post(
-     *     path="/api/nodes",
+     *     path="/api/v1/nodes",
      *     tags={"Nodes"},
      *     summary="Crear un nuevo nodo",
+     *     description="Crea un nodo nuevo con o sin padre.",
      *     @OA\RequestBody(
      *         required=true,
      *         @OA\JsonContent(
-     *             required={"id"},
-     *             @OA\Property(property="id", type="integer", example=7),
      *             @OA\Property(property="parent", type="integer", nullable=true, example=1)
      *         )
      *     ),
      *     @OA\Response(response=201, description="Nodo creado correctamente"),
-     *     @OA\Response(response=400, description="Error de validación o jerarquía")
+     *     @OA\Response(response=400, description="Error de validación"),
+     *     @OA\Response(response=500, description="Error interno")
      * )
      */
     public function store(StoreNodeRequest $request): JsonResponse
     {
         try {
-            $locale = substr(
-                $request->header('X-Lang') ?: $request->header('Accept-Language') ?: 'en',
-                0,
-                2
-            );
+            $locale = substr($request->header('X-Lang') ?: $request->header('Accept-Language') ?: 'en', 0, 2);
+            $parentId = $request->validated()['parent'] ?? null;
 
-            $node = $this->nodeService->createNode(
-                $request->validated()['parent'] ?? null,
-                $locale
-            );
+            $node = $this->nodeService->createNode($parentId, $locale);
 
             return response()->json([
                 'success' => true,
                 'data' => new NodeResource($node),
             ], 201);
         } catch (\Throwable $e) {
-            Log::error('Error en NodeController@store', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'No se pudo crear el nodo.',
-            ], 500);
+            Log::error('Error creando nodo', ['error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => 'No se pudo crear el nodo.'], 500);
         }
     }
 
-
-    // Listar hijos a partir del padre con optional depth
-    public function listChildren(Request $request, $parentId)
+    /**
+     * @OA\Get(
+     *     path="/api/v1/nodes/{parent}/children",
+     *     tags={"Nodes"},
+     *     summary="Listar hijos de un nodo",
+     *     description="Devuelve los hijos directos o recursivos de un nodo padre.",
+     *     @OA\Parameter(
+     *         name="parent",
+     *         in="path",
+     *         required=true,
+     *         description="ID del nodo padre",
+     *         @OA\Schema(type="integer", example=1)
+     *     ),
+     *     @OA\Parameter(
+     *         name="depth",
+     *         in="query",
+     *         required=false,
+     *         description="Profundidad de búsqueda (por defecto hijos directos)",
+     *         @OA\Schema(type="integer", example=2)
+     *     ),
+     *     @OA\Response(response=200, description="Lista de hijos"),
+     *     @OA\Response(response=404, description="Nodo padre no encontrado"),
+     *     @OA\Response(response=400, description="Parámetros inválidos")
+     *     @OA\Response(response=500, description="Error en el servidor")
+     * )
+     */
+    public function listChildren(Request $request, int $parentId): JsonResponse
     {
-        $locale = substr($request->header('X-Lang') ?: $request->header('Accept-Language') ?: 'en', 0, 2);
-        $tz = $request->attributes->get('tz') ?: config('app.timezone','UTC');
-
-        $depth = $request->query('depth'); // null or integer
-
-        $parent = Node::find($parentId);
-        if (!$parent) {
-            return response()->json(['message' => 'Parent node not found'], 404);
+        if ($parentId <= 0) {
+            return response()->json(['message' => 'Parent ID must be a positive integer'], 422);
         }
 
-        // Depth not provided => direct children only
-        if (is_null($depth)) {
-            $children = $parent->children()->get();
-            $mapped = $children->map(fn($n) => [
-                'id' => (int)$n->id,
-                'parent' => $n->parent ? (int)$n->parent : null,
-                'title' => NumberWordService::numberToWords((int)$n->id, $locale),
-                'created_at' => Carbon::parse($n->created_at, 'UTC')->setTimezone($tz)->toDateTimeString(),
-            ]);
-            return response()->json($mapped);
-        }
+        try {
+            $locale = substr($request->header('X-Lang') ?: $request->header('Accept-Language') ?: 'en', 0, 2);
+            $tz = $request->attributes->get('tz') ?: config('app.timezone', 'UTC');
+            $depth = $request->query('depth');
 
-        // depth provided
-        $depth = (int)$depth;
-        if ($depth < 1) {
-            return response()->json(['message' => 'Depth must be >= 1'], 400);
-        }
-
-        // recursive retrieval limited by depth
-        $result = $this->getChildrenRecursive($parent, $depth, $locale, $tz);
-
-        return response()->json($result);
-    }
-
-    // helper recursive function to build children tree up to depth
-    private function getChildrenRecursive(Node $node, int $depth, string $locale, string $tz)
-    {
-        if ($depth <= 0) {
-            return null;
-        }
-
-        $children = $node->children()->get();
-
-        $mapped = $children->map(function ($n) use ($depth, $locale, $tz) {
-            $res = [
-                'id' => (int)$n->id,
-                'parent' => $n->parent ? (int)$n->parent : null,
-                'title' => NumberWordService::numberToWords((int)$n->id, $locale),
-                'created_at' => Carbon::parse($n->created_at, 'UTC')->setTimezone($tz)->toDateTimeString(),
-            ];
-
-            if ($depth - 1 > 0) {
-                $res['children'] = $this->getChildrenRecursive($n, $depth - 1, $locale, $tz);
-            } else {
-                $res['children'] = [];
+            $parent = $this->nodeRepo->findById($parentId);
+            if (!$parent) {
+                return response()->json(['message' => 'Parent node not found'], 404);
             }
 
-            return $res;
-        });
+            $children = $this->nodeService->getChildren($parent, $depth, $locale, $tz);
 
-        return $mapped;
+            return response()->json(['success' => true, 'data' => $children]);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        } catch (\Throwable $e) {
+            Log::error('Error en listChildren', ['error' => $e->getMessage()]);
+            return response()->json(['message' => 'Internal Server Error'], 500);
+        }
     }
 
-    // Eliminar nodo (permitir sólo si no tiene hijos)
-    public function destroy(Request $request, $id)
+    /**
+     * @OA\Delete(
+     *     path="/api/v1/nodes/{id}",
+     *     tags={"Nodes"},
+     *     summary="Eliminar un nodo",
+     *     description="Elimina un nodo si no tiene hijos.",
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         required=true,
+     *         description="ID del nodo a eliminar",
+     *         @OA\Schema(type="integer", example=5)
+     *     ),
+     *     @OA\Response(response=200, description="Nodo eliminado correctamente"),
+     *     @OA\Response(response=404, description="Nodo no encontrado"),
+     *     @OA\Response(response=409, description="Nodo con hijos no puede eliminarse")
+     * )
+     */
+    public function destroy(int $id): JsonResponse
     {
-        $node = Node::find($id);
-        if (!$node) {
-            return response()->json(['message' => 'Node not found'], 404);
+        try {
+            $result = $this->nodeService->deleteNode($id);
+
+            return response()->json([
+                'success' => $result['success'],
+                'message' => $result['message'],
+            ], $result['code']);
+        } catch (\Throwable $e) {
+            Log::error('Error deleting node', ['error' => $e->getMessage()]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Internal Server Error',
+            ], 500);
         }
-
-        $childrenCount = $node->children()->count();
-        if ($childrenCount > 0) {
-            return response()->json(['message' => 'Cannot delete node with children'], 409);
-        }
-
-        $node->delete();
-
-        return response()->json(['message' => 'Deleted'], 200);
     }
 }
