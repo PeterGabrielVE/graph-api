@@ -10,25 +10,20 @@ API para gestionar nodos jerárquicos (árbol de nodos), con soporte para creaci
 - Docker Compose ≥ 1.29
 - Opcional: Postman  para probar la API
 
----
+# Despliegue rápido con Docker
 
-## 🏗️ Despliegue rápido con Docker
-
-1. **Levantar servicios:**
-
-```bash
-docker-compose up -d --build
-
-2. **Instalar dependencias de Composer (si no se copiaron en la imagen)**
-docker exec -it graph-api-apok composer install
-
-3. ** Ejecutar migraciones de base de datos: **
-docker exec -it graph-api-apok php artisan migrate
-
-4. ** Opcional: Poblar datos iniciales**
-docker exec -it graph-api-apok php artisan db:seed
-
-URLS
-| Laravel API | [http://localhost:8000/api/v1](http://localhost:8000/api/v1)                       |
-| Swagger UI  | [http://localhost:8000/api/documentation](http://localhost:8000/api/documentation) |
-| phpMyAdmin  | [http://localhost:8080](http://localhost:8080)                                     |
+1. Clonar el repositorio:
+   git clone https://github.com/PeterGabrielVE/graph-api.git
+2. Levantar contenedores:
+   docker-compose up -d --build
+3. Ejecutar migraciones:
+   docker exec -it graph-api-apok php artisan migrate
+4. (Opcional) Poblar datos:
+   docker exec -it graph-api-apok php artisan db:seed
+5. Acceder a la API:
+   http://localhost:8000/api/v1
+6. Acceder a Swagger:
+   http://localhost:8000/api/documentation
+7. Acceder a phpMyAdmin:
+   http://localhost:8080
+                      |
