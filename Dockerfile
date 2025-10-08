@@ -26,5 +26,8 @@ COPY ./src /var/www/html
 # Permisos
 RUN chown -R www-data:www-data /var/www/html
 
+# Puerto expuesto por PHP Artisan Serve
+EXPOSE 8000
+
 # Comando por defecto
-CMD ["php-fpm"]
+CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
