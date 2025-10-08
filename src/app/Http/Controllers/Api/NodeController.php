@@ -54,6 +54,14 @@ class NodeController extends Controller
      *                 )
      *             )
      *         )
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Error interno",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Error interno del servidor.")
+     *         )
      *     )
      * )
      */
@@ -95,9 +103,30 @@ class NodeController extends Controller
      *             @OA\Property(property="parent", type="integer", nullable=true, example=1)
      *         )
      *     ),
-     *     @OA\Response(response=201, description="Nodo creado correctamente"),
-     *     @OA\Response(response=400, description="Error de validación"),
-     *     @OA\Response(response=500, description="Error interno")
+     *     @OA\Response(
+     *         response=201,
+     *         description="Nodo creado correctamente",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="data", type="object")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=400,
+     *         description="Error de validación",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Error de validación")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Error interno",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="No se pudo crear el nodo.")
+     *         )
+     *     )
      * )
      */
     public function store(StoreNodeRequest $request): JsonResponse
@@ -138,10 +167,42 @@ class NodeController extends Controller
      *         description="Profundidad de búsqueda (por defecto hijos directos)",
      *         @OA\Schema(type="integer", example=2)
      *     ),
-     *     @OA\Response(response=200, description="Lista de hijos"),
-     *     @OA\Response(response=404, description="Nodo padre no encontrado"),
-     *     @OA\Response(response=400, description="Parámetros inválidos")
-     *     @OA\Response(response=500, description="Error en el servidor")
+     *     @OA\Response(
+     *         response=200,
+     *         description="Lista de hijos",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="data", type="array",
+     *                 @OA\Items(
+     *                     @OA\Property(property="id", type="integer", example=2),
+     *                     @OA\Property(property="parent", type="integer", example=1),
+     *                     @OA\Property(property="title", type="string", example="Two"),
+     *                     @OA\Property(property="created_at", type="string", example="2025-10-07 20:20:00")
+     *                 )
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Nodo padre no encontrado",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string", example="Parent node not found")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=400,
+     *         description="Parámetros inválidos",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string", example="Depth must be >= 1")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Error en el servidor",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string", example="Internal Server Error")
+     *         )
+     *     )
      * )
      */
     public function listChildren(Request $request, int $parentId): JsonResponse
@@ -184,9 +245,38 @@ class NodeController extends Controller
      *         description="ID del nodo a eliminar",
      *         @OA\Schema(type="integer", example=5)
      *     ),
-     *     @OA\Response(response=200, description="Nodo eliminado correctamente"),
-     *     @OA\Response(response=404, description="Nodo no encontrado"),
-     *     @OA\Response(response=409, description="Nodo con hijos no puede eliminarse")
+     *     @OA\Response(
+     *         response=200,
+     *         description="Nodo eliminado correctamente",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Node deleted successfully")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Nodo no encontrado",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Node not found")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=409,
+     *         description="Nodo con hijos no puede eliminarse",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Cannot delete node with children")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Error interno del servidor",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Internal Server Error")
+     *         )
+     *     )
      * )
      */
     public function destroy(int $id): JsonResponse
